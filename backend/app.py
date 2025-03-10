@@ -134,3 +134,48 @@ def identify_gamma_levels(gamma_by_strike):
     top_levels = sorted_gamma.head(5).to_dict('records')
     
     return top_levels
+
+def fetch_market_data():
+    """
+    Récupère les données de marché pour tous les tickers
+    """
+    try:
+        logger.info("Fetching market data...")
+        all_data = {}
+        
+        # Utiliser yfinance pour récupérer les données de marché
+        data = yf.download(ALL_TICKERS, period="1d")
+        
+        # Traiter les données pour chaque ticker
+        for ticker in ALL_TICKERS:
+            try:
+                # Récupérer la dernière barre
+                last_bar = {
+                    'ticker': ticker,
+                    'timestamp': datetime.now(),
+                    'open': float(data['Open'][ticker].iloc[-1]),
+                    'high': float(data['High'][ticker].iloc[-1]),
+                    'low': float(data['Low'][ticker].iloc[-1]),
+                    'close': float(data['Close'][ticker].iloc[-1]),
+                    'volume': float(data['Volume'][ticker].iloc[-1]),
+                    'change': float((data['Close'][ticker].iloc[-1] / data['Open'][ticker].iloc[-1] - 1) * 100)
+                }
+                
+                # Stockage dans MongoDB
+                market_data_collection.update_one(
+                    {'ticker': ticker},
+                    {'$set': last_bar},
+                    upsert=True
+                )
+                
+                all_data[ticker] = last_bar
+                logger.info(f"Updated market data for {ticker}")
+                
+            except Exception as e:
+                logger.error(f"Error fetching data for ticker {ticker}: {str(e)}")
+        
+        return all_data
+        
+    except Exception as e:
+        logger.error(f"Error in fetch_market_data: {str(e)}")
+        return {}
