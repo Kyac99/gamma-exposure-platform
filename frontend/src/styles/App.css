@@ -1,0 +1,96 @@
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  padding: 30px;
+  margin-left: 250px;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.spinner {
+  animation: spin 1s infinite linear;
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: #3f51b5;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error {
+  text-align: center;
+  padding: 2rem;
+  background-color: #ffebee;
+  border-radius: 8px;
+  margin: 2rem 0;
+}
+
+.error h2 {
+  color: #d32f2f;
+  margin-bottom: 1rem;
+}
+
+.error p {
+  margin-bottom: 1.5rem;
+}
+
+.positive {
+  color: #4caf50;
+  font-weight: 500;
+}
+
+.negative {
+  color: #f44336;
+  font-weight: 500;
+}
+
+.refresh-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #3f51b5;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.refresh-button:hover {
+  background-color: #303f9f;
+}
+
+.refresh-button:disabled {
+  background-color: #bdbdbd;
+  cursor: not-allowed;
+}
+
+.back-link {
+  display: inline-block;
+  margin-top: 1rem;
+  color: #3f51b5;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
