@@ -179,3 +179,103 @@ def fetch_market_data():
     except Exception as e:
         logger.error(f"Error in fetch_market_data: {str(e)}")
         return {}
+
+def fetch_options_data():
+    """
+    Récupère les données d'options pour tous les tickers et calcule le Gamma Exposure
+    """
+    try:
+        logger.info("Fetching options data...")
+        
+        for ticker in ALL_TICKERS:
+            try:
+                # Récupérer le prix actuel
+                stock = yf.Ticker(ticker)
+                current_price = stock.info.get('regularMarketPrice', None)
+                
+                if not current_price:
+                    logger.warning(f"Could not get price for {ticker}, skipping options data")
+                    continue
+                
+                # Récupérer les chaînes d'options
+                expirations = stock.options
+                
+                if not expirations:
+                    logger.warning(f"No options data available for {ticker}")
+                    continue
+                
+                # Prendre les 3 premières dates d'expiration pour le MVP
+                all_options = {'calls': [], 'puts': []}
+                
+                for expiration in expirations[:3]:
+                    try:
+                        opt = stock.option_chain(expiration)
+                        
+                        # Traitement des calls
+                        calls = opt.calls
+                        for _, row in calls.iterrows():
+                            all_options['calls'].append({
+                                'strike': float(row['strike']),
+                                'expiration': expiration,
+                                'lastPrice': float(row['lastPrice']),
+                                'bid': float(row['bid']),
+                                'ask': float(row['ask']),
+                                'impliedVolatility': float(row['impliedVolatility']),
+                                'openInterest': int(row['openInterest']),
+                                'volume': int(row['volume'])
+                            })
+                        
+                        # Traitement des puts
+                        puts = opt.puts
+                        for _, row in puts.iterrows():
+                            all_options['puts'].append({
+                                'strike': float(row['strike']),
+                                'expiration': expiration,
+                                'lastPrice': float(row['lastPrice']),
+                                'bid': float(row['bid']),
+                                'ask': float(row['ask']),
+                                'impliedVolatility': float(row['impliedVolatility']),
+                                'openInterest': int(row['openInterest']),
+                                'volume': int(row['volume'])
+                            })
+                    
+                    except Exception as e:
+                        logger.error(f"Error processing expiration {expiration} for {ticker}: {str(e)}")
+                
+                # Stocker les données d'options
+                options_data_collection.update_one(
+                    {'ticker': ticker},
+                    {'$set': {
+                        'ticker': ticker,
+                        'timestamp': datetime.now(),
+                        'options': all_options
+                    }},
+                    upsert=True
+                )
+                
+                # Calculer et stocker le Gamma Exposure
+                gamma_analysis = calculate_gamma(all_options, current_price)
+                
+                gamma_analysis_collection.update_one(
+                    {'ticker': ticker},
+                    {'$set': {
+                        'ticker': ticker,
+                        'timestamp': datetime.now(),
+                        'spotPrice': current_price,
+                        'netGamma': gamma_analysis['netGamma'],
+                        'gammaByStrike': gamma_analysis['gammaByStrike'],
+                        'gammaLevels': gamma_analysis['gammaLevels']
+                    }},
+                    upsert=True
+                )
+                
+                logger.info(f"Updated options and gamma data for {ticker}")
+                
+            except Exception as e:
+                logger.error(f"Error processing options for ticker {ticker}: {str(e)}")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error in fetch_options_data: {str(e)}")
+        return False
