@@ -279,3 +279,200 @@ def fetch_options_data():
     except Exception as e:
         logger.error(f"Error in fetch_options_data: {str(e)}")
         return False
+
+def generate_trading_strategy(ticker):
+    """
+    Génère une stratégie de trading basée sur l'analyse du Gamma Exposure
+    """
+    try:
+        # Récupérer les données de marché et de gamma
+        market_data = market_data_collection.find_one({'ticker': ticker})
+        gamma_data = gamma_analysis_collection.find_one({'ticker': ticker})
+        
+        if not market_data or not gamma_data:
+            return {'error': 'Data not available for this ticker'}
+        
+        current_price = market_data['close']
+        net_gamma = gamma_data['netGamma']
+        gamma_levels = gamma_data.get('gammaLevels', [])
+        
+        # Déterminer la direction du biais en fonction du gamma net
+        if net_gamma > 0:
+            bias = "bullish"  # Gamma positif = biais haussier
+            message = "Le gamma net positif suggère une force haussière et une résistance à la baisse."
+        elif net_gamma < 0:
+            bias = "bearish"  # Gamma négatif = biais baissier
+            message = "Le gamma net négatif suggère une force baissière et une résistance à la hausse."
+        else:
+            bias = "neutral"
+            message = "Le gamma net proche de zéro suggère un marché équilibré sans biais directionnel fort."
+        
+        # Identifier les niveaux de gamma proches
+        nearby_levels = []
+        support_levels = []
+        resistance_levels = []
+        
+        for level in gamma_levels:
+            strike = level['strike']
+            gamma_exposure = level['gammaExposure']
+            distance = ((strike / current_price) - 1) * 100  # Distance en pourcentage
+            
+            if abs(distance) < 5:  # Niveaux à moins de 5% du prix actuel
+                nearby_levels.append({
+                    'strike': strike,
+                    'gammaExposure': gamma_exposure,
+                    'distance': distance
+                })
+            
+            # Les niveaux avec gamma positif agissent comme support, négatif comme résistance
+            if gamma_exposure > 0 and strike < current_price:
+                support_levels.append({
+                    'strike': strike,
+                    'gammaExposure': gamma_exposure,
+                    'distance': distance
+                })
+            elif gamma_exposure < 0 and strike > current_price:
+                resistance_levels.append({
+                    'strike': strike,
+                    'gammaExposure': gamma_exposure,
+                    'distance': distance
+                })
+        
+        # Trier les niveaux
+        support_levels = sorted(support_levels, key=lambda x: x['strike'], reverse=True)
+        resistance_levels = sorted(resistance_levels, key=lambda x: x['strike'])
+        
+        # Générer des recommandations
+        recommendations = []
+        
+        if bias == "bullish":
+            recommendations.append("Considérer des positions longues avec des stops sous les niveaux de support majeurs.")
+            if support_levels:
+                closest_support = support_levels[0]['strike']
+                recommendations.append(f"Stop suggéré à {closest_support} (support gamma).")
+            if resistance_levels:
+                closest_resistance = resistance_levels[0]['strike']
+                recommendations.append(f"Objectif de profit initial à {closest_resistance} (résistance gamma).")
+        
+        elif bias == "bearish":
+            recommendations.append("Considérer des positions courtes avec des stops au-dessus des niveaux de résistance majeurs.")
+            if resistance_levels:
+                closest_resistance = resistance_levels[0]['strike']
+                recommendations.append(f"Stop suggéré à {closest_resistance} (résistance gamma).")
+            if support_levels:
+                closest_support = support_levels[0]['strike']
+                recommendations.append(f"Objectif de profit initial à {closest_support} (support gamma).")
+        
+        else:
+            recommendations.append("Marché sans biais directionnel clair. Privilégier des stratégies neutres ou attendre une clarification du biais.")
+        
+        # Structurer la stratégie
+        strategy = {
+            'ticker': ticker,
+            'currentPrice': current_price,
+            'timestamp': datetime.now(),
+            'bias': bias,
+            'netGamma': net_gamma,
+            'message': message,
+            'nearbyLevels': nearby_levels,
+            'supportLevels': support_levels,
+            'resistanceLevels': resistance_levels,
+            'recommendations': recommendations
+        }
+        
+        return strategy
+        
+    except Exception as e:
+        logger.error(f"Error generating trading strategy for {ticker}: {str(e)}")
+        return {'error': str(e)}
+
+# Routes API
+
+@app.route('/api/market-data', methods=['GET'])
+def get_market_data():
+    """API pour obtenir les données de marché pour tous les tickers"""
+    try:
+        data = list(market_data_collection.find({}, {'_id': 0}))
+        return jsonify(data)
+    except Exception as e:
+        logger.error(f"Error fetching market data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/market-data/<ticker>', methods=['GET'])
+def get_ticker_market_data(ticker):
+    """API pour obtenir les données de marché pour un ticker spécifique"""
+    try:
+        data = market_data_collection.find_one({'ticker': ticker}, {'_id': 0})
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({'error': 'Ticker not found'}), 404
+    except Exception as e:
+        logger.error(f"Error fetching market data for {ticker}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/gamma-data', methods=['GET'])
+def get_gamma_data():
+    """API pour obtenir les données de gamma pour tous les tickers"""
+    try:
+        data = list(gamma_analysis_collection.find({}, {'_id': 0}))
+        return jsonify(data)
+    except Exception as e:
+        logger.error(f"Error fetching gamma data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/gamma-data/<ticker>', methods=['GET'])
+def get_ticker_gamma_data(ticker):
+    """API pour obtenir les données de gamma pour un ticker spécifique"""
+    try:
+        data = gamma_analysis_collection.find_one({'ticker': ticker}, {'_id': 0})
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({'error': 'Ticker not found'}), 404
+    except Exception as e:
+        logger.error(f"Error fetching gamma data for {ticker}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/trading-strategy/<ticker>', methods=['GET'])
+def get_trading_strategy(ticker):
+    """API pour obtenir la stratégie de trading pour un ticker spécifique"""
+    try:
+        strategy = generate_trading_strategy(ticker)
+        return jsonify(strategy)
+    except Exception as e:
+        logger.error(f"Error generating trading strategy for {ticker}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/refresh-data', methods=['POST'])
+def refresh_data():
+    """API pour forcer le rafraîchissement des données"""
+    try:
+        market_data = fetch_market_data()
+        options_data = fetch_options_data()
+        
+        return jsonify({
+            'success': True,
+            'marketDataUpdated': bool(market_data),
+            'optionsDataUpdated': options_data
+        })
+    except Exception as e:
+        logger.error(f"Error refreshing data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Planificateur de tâches
+scheduler = BackgroundScheduler()
+scheduler.add_job(fetch_market_data, 'interval', minutes=15)
+scheduler.add_job(fetch_options_data, 'interval', minutes=30)
+
+# Point d'entrée principal
+if __name__ == '__main__':
+    # Démarrer le planificateur
+    scheduler.start()
+    
+    # Initialiser les données au démarrage
+    fetch_market_data()
+    fetch_options_data()
+    
+    # Démarrer l'application Flask
+    app.run(debug=True, host='0.0.0.0', port=5000)
