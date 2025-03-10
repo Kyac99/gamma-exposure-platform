@@ -138,8 +138,8 @@ Ce projet est sous licence MIT. Voir le fichier LICENSE pour plus de détails.
 
 ## Contributeurs
 
-- [Votre nom/équipe]
+- [Kyac]
 
 ## Contact
 
-Pour toute question ou suggestion, veuillez nous contacter à [votre-email@example.com].
+Pour toute question ou suggestion, veuillez nous contacter à [...].
