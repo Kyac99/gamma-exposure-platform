@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # Service MongoDB
+  mongodb:
+    image: mongo:latest
+    container_name: gamma-exposure-mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    networks:
+      - gamma-exposure-network
+
+  # Service Backend Flask
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gamma-exposure-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - MONGO_URI=mongodb://admin:password@mongodb:27017/
+      - FLASK_ENV=production
+    depends_on:
+      - mongodb
+    networks:
+      - gamma-exposure-network
+
+  # Service Frontend React
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gamma-exposure-frontend
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - REACT_APP_API_BASE_URL=http://localhost:5000/api
+    depends_on:
+      - backend
+    networks:
+      - gamma-exposure-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  gamma-exposure-network:
+    driver: bridge
